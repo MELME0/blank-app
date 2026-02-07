@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 import streamlit as st
+import streamlit.components.v1 as components
 
 # =========================================================
 # Configuration
@@ -30,58 +31,61 @@ def normalize_section(name: str) -> str:
     return name.strip().title()
 
 # =========================================================
-# M.I.S.O. Bot (Floating + Mini-Widget)
+# Floating Draggable M.I.S.O. Component
 # =========================================================
 
 def render_miso_bot():
-    st.markdown(
-        """
+    """
+    A true floating, draggable, mini-toggle bot.
+    Position persists across reruns. Mini/normal mode toggle works like Spotify widget.
+    """
+    html_code = """
 <style>
 #miso-container {
-  position: fixed;
-  top: 30px;
-  left: 30px;
-  z-index: 999999;
-  user-select: none;
+    position: fixed;
+    top: 30px;
+    left: 30px;
+    z-index: 999999;
+    user-select: none;
 }
 
 #miso-bot {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: white;
-  border: 5px solid #ddd;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-  cursor: grab;
-  position: relative;
-  transition: all 0.2s ease;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: white;
+    border: 5px solid #ddd;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    cursor: grab;
+    position: relative;
+    transition: all 0.2s ease;
 }
 
 .eye {
-  width: 25px;
-  height: 25px;
-  background: black;
-  border-radius: 50%;
-  position: absolute;
-  top: 17px;
+    width: 25px;
+    height: 25px;
+    background: black;
+    border-radius: 50%;
+    position: absolute;
+    top: 17px;
 }
 
 .eye.left { left: 6px; }
 .eye.right { left: 29px; }
 
 .mini #miso-bot {
-  width: 40px;
-  height: 40px;
-  border-width: 3px;
+    width: 40px;
+    height: 40px;
+    border-width: 3px;
 }
 
-#miso-toggle-widget {
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  font-size: 14px;
-  padding: 2px 5px;
-  cursor: pointer;
+#toggle-widget {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    font-size: 14px;
+    padding: 2px 5px;
+    cursor: pointer;
 }
 </style>
 
@@ -90,67 +94,68 @@ def render_miso_bot():
     <div class="eye left"></div>
     <div class="eye right"></div>
   </div>
-  <button id="miso-toggle-widget">🗔</button>
+  <button id="toggle-widget">🗔</button>
 </div>
 
 <script>
 const container = document.getElementById('miso-container');
 const bot = document.getElementById('miso-bot');
-const toggle = document.getElementById('miso-toggle-widget');
+const toggle = document.getElementById('toggle-widget');
 
 let dragging = false;
 let offsetX = 0;
 let offsetY = 0;
 
-// Restore saved position
-const saved = localStorage.getItem('miso-pos');
-if(saved) {
-  const pos = JSON.parse(saved);
-  container.style.left = pos.x + 'px';
-  container.style.top = pos.y + 'px';
-} else {
-  container.style.left = '30px';
-  container.style.top = '30px';
+// Restore saved position & mode
+const saved = localStorage.getItem('miso-state');
+if(saved){
+    const state = JSON.parse(saved);
+    container.style.left = state.x+'px';
+    container.style.top = state.y+'px';
+    if(state.mini) container.classList.add('mini');
 }
 
-// Drag logic
-bot.addEventListener('mousedown', e => {
-  dragging = true;
-  const rect = container.getBoundingClientRect();
-  offsetX = e.clientX - rect.left;
-  offsetY = e.clientY - rect.top;
-  bot.style.cursor = 'grabbing';
-  e.preventDefault();
+// Drag functionality
+bot.addEventListener('mousedown', e=>{
+    dragging=true;
+    const rect=container.getBoundingClientRect();
+    offsetX=e.clientX-rect.left;
+    offsetY=e.clientY-rect.top;
+    bot.style.cursor='grabbing';
+    e.preventDefault();
+});
+document.addEventListener('mousemove', e=>{
+    if(!dragging) return;
+    container.style.left=(e.clientX-offsetX)+'px';
+    container.style.top=(e.clientY-offsetY)+'px';
+});
+document.addEventListener('mouseup', ()=>{
+    if(!dragging) return;
+    dragging=false;
+    bot.style.cursor='grab';
+    localStorage.setItem('miso-state', JSON.stringify({
+        x: container.offsetLeft,
+        y: container.offsetTop,
+        mini: container.classList.contains('mini')
+    }));
 });
 
-document.addEventListener('mousemove', e => {
-  if (!dragging) return;
-  container.style.left = (e.clientX - offsetX) + 'px';
-  container.style.top = (e.clientY - offsetY) + 'px';
-});
-
-document.addEventListener('mouseup', () => {
-  if (!dragging) return;
-  dragging = false;
-  bot.style.cursor = 'grab';
-  // Save position
-  localStorage.setItem('miso-pos', JSON.stringify({
-    x: container.offsetLeft,
-    y: container.offsetTop
-  }));
-});
-
-// Toggle mini-widget mode
-toggle.addEventListener('click', () => {
-  container.classList.toggle('mini');
+// Mini toggle
+toggle.addEventListener('click', ()=>{
+    container.classList.toggle('mini');
+    localStorage.setItem('miso-state', JSON.stringify({
+        x: container.offsetLeft,
+        y: container.offsetTop,
+        mini: container.classList.contains('mini')
+    }));
 });
 </script>
-        """,
-        unsafe_allow_html=True
-    )
+"""
+    # Embed in a component (isolated iframe)
+    components.html(html_code, height=150, width=150)
 
 # =========================================================
-# Streamlit Setup
+# Streamlit App Setup
 # =========================================================
 
 st.set_page_config(page_title="M.I.S.O.", layout="centered")
@@ -182,18 +187,19 @@ if not st.session_state.authenticated:
     st.stop()
 
 # =========================================================
-# Main App
+# Render M.I.S.O. Bot
 # =========================================================
 
 render_miso_bot()
-st.markdown(f"### Welcome, **{st.session_state.user_name}** 👋")
 
+# =========================================================
+# Main App Logic
+# =========================================================
+
+st.markdown(f"### Welcome, **{st.session_state.user_name}** 👋")
 data = load_data()
 
-# =========================================================
 # Section selection
-# =========================================================
-
 st.markdown("---")
 section_input = st.text_input("Open or create a section")
 if not section_input:
@@ -203,10 +209,7 @@ if not section_input:
 section = normalize_section(section_input)
 items = data.setdefault(section, [])
 
-# =========================================================
-# Add Item
-# =========================================================
-
+# Add new item
 st.markdown("---")
 st.subheader(f"Add to {section}")
 with st.form("add_item", clear_on_submit=True):
@@ -226,13 +229,9 @@ if add and title.strip():
     st.success("Item added.")
     st.rerun()
 
-# =========================================================
-# Display Items
-# =========================================================
-
+# Display items
 st.markdown("---")
 st.subheader(section)
-
 if not items:
     st.info("No items yet.")
 else:
@@ -246,10 +245,7 @@ else:
                 save_data(data)
                 st.rerun()
 
-# =========================================================
 # Sidebar
-# =========================================================
-
 st.sidebar.markdown("---")
 st.sidebar.write("Data file:", DATA_FILE)
 st.sidebar.caption("⚠️ Data may reset on Streamlit Community Cloud")
