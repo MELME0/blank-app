@@ -2,16 +2,17 @@ import json
 from pathlib import Path
 from datetime import datetime
 import streamlit as st
+import streamlit.components.v1 as components
 
 # --------------------
-# Configuration
+# Config
 # --------------------
 DATA_FILE = Path(".help_data.json")
 APP_TITLE = "🎈 M.I.S.O."
 APP_SUBTITLE = "Module Information System Organizer"
 
 # --------------------
-# Utilities
+# Utils
 # --------------------
 def load_data() -> dict:
     if DATA_FILE.exists():
@@ -26,6 +27,13 @@ def save_data(data: dict):
 
 def normalize_section(name: str) -> str:
     return name.strip().title()
+
+# --------------------
+# Streamlit App Setup
+# --------------------
+st.set_page_config(page_title=APP_TITLE)
+st.title(APP_TITLE)
+st.write(APP_SUBTITLE)
 
 # --------------------
 # Authentication
@@ -54,128 +62,116 @@ if not st.session_state.authenticated:
     st.stop()
 
 # --------------------
-# M.I.S.O. Bot Overlay (Full Page)
+# Mini Tab Launcher
 # --------------------
-st.markdown("""
-<style>
-#miso-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    pointer-events: auto;
-    z-index: 99999;
-}
-#miso-bot {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: white;
-    border: 5px solid #ddd;
-    position: absolute;
-    top: 100px;
-    left: 100px;
-    cursor: grab;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
-    pointer-events: auto;
-}
-.eye {
-    width: 25px;
-    height: 25px;
-    border-radius: 50%;
-    background: black;
-    position: absolute;
-    top: 17px;
-}
-.eye.left { left: 6px; }
-.eye.right { left: 29px; }
-</style>
+st.markdown("---")
+st.subheader("Launch Mini M.I.S.O Tab")
+if st.button("Open Mini Tab"):
+    # This JS opens a separate browser window and injects the bot
+    components.html("""
+    <script>
+    const miniWin = window.open(
+        '',
+        'MISO Mini',
+        'width=400,height=400,top=100,left=100,scrollbars=no,resizable=yes'
+    );
 
-<div id="miso-overlay">
-    <div id="miso-bot">
-        <div class="eye left"></div>
-        <div class="eye right"></div>
-    </div>
-</div>
+    miniWin.document.write(`
+        <style>
+        body { margin:0; overflow:hidden; background:#f0f0f0; }
+        #miso-bot {
+            width:60px; height:60px; border-radius:50%;
+            background:white; border:5px solid #ddd;
+            position:absolute; top:100px; left:100px;
+            box-shadow:0 6px 20px rgba(0,0,0,0.2);
+            cursor:grab; z-index:9999;
+        }
+        .eye { width:25px; height:25px; border-radius:50%; background:black; position:absolute; top:17px; }
+        .eye.left { left:6px; } .eye.right { left:29px; }
+        .trail { position:absolute; width:60px; height:60px; border-radius:50%; background:rgba(200,200,200,0.2); pointer-events:none; filter:blur(2px);}
+        </style>
 
-<script>
-const bot = document.getElementById('miso-bot');
+        <div id="miso-bot">
+            <div class="eye left"></div>
+            <div class="eye right"></div>
+        </div>
 
-// Dragging
-let dragging=false, offsetX=0, offsetY=0;
-bot.addEventListener('mousedown', e=>{
-    dragging=true;
-    offsetX = e.clientX - bot.offsetLeft;
-    offsetY = e.clientY - bot.offsetTop;
-    bot.style.cursor='grabbing';
-});
-document.addEventListener('mousemove', e=>{
-    if(!dragging) return;
-    bot.style.left=(e.clientX - offsetX)+'px';
-    bot.style.top=(e.clientY - offsetY)+'px';
-    // motion trail
-    bot.style.boxShadow = '0 6px 20px rgba(0,0,0,0.15), 0 0 15px rgba(0,0,0,0.05)';
-});
-document.addEventListener('mouseup', ()=>{
-    dragging=false;
-    bot.style.cursor='grab';
-    bot.style.boxShadow='0 6px 20px rgba(0,0,0,0.2)';
-});
+        <script>
+        const bot = document.getElementById('miso-bot');
+        const leftEye = bot.querySelector('.eye.left');
+        const rightEye = bot.querySelector('.eye.right');
 
-// Hover-away
-document.addEventListener('mousemove', e=>{
-    const rect = bot.getBoundingClientRect();
-    const dx = rect.left + rect.width/2 - e.clientX;
-    const dy = rect.top + rect.height/2 - e.clientY;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if(!dragging && dist<100){
-        const strength=(1 - dist/100)*40;
-        bot.style.transform = `translate(${dx/dist*strength}px, ${dy/dist*strength}px)`;
-    } else if(!dragging){
-        bot.style.transform='';
-    }
-});
+        let dragging=false, offsetX=0, offsetY=0;
+        let exprIndex=0;
+        const expressions=['scale(1)','scale(1.2)','scale(0.8)','scale(1.1)'];
 
-// Mini-toggle
-let miniMode=false;
-bot.addEventListener('dblclick', ()=>{
-    miniMode = !miniMode;
-    if(miniMode){
-        bot.style.width='40px';
-        bot.style.height='40px';
-        document.querySelector('.eye.left').style.width='12px';
-        document.querySelector('.eye.left').style.height='12px';
-        document.querySelector('.eye.right').style.width='12px';
-        document.querySelector('.eye.right').style.height='12px';
-    } else {
-        bot.style.width='60px';
-        bot.style.height='60px';
-        document.querySelector('.eye.left').style.width='25px';
-        document.querySelector('.eye.left').style.height='25px';
-        document.querySelector('.eye.right').style.width='25px';
-        document.querySelector('.eye.right').style.height='25px';
-    }
-});
+        bot.addEventListener('mousedown', e=>{
+            dragging=true;
+            offsetX=e.clientX - bot.offsetLeft;
+            offsetY=e.clientY - bot.offsetTop;
+            bot.style.cursor='grabbing';
+        });
 
-// Expressions
-let expressions=['scale(1)','scale(1.2)','scale(0.8)'], exprIndex=0;
-bot.addEventListener('click', ()=>{
-    exprIndex=(exprIndex+1)%expressions.length;
-    bot.style.transform=expressions[exprIndex];
-});
-</script>
-""", unsafe_allow_html=True)
+        document.addEventListener('mousemove', e=>{
+            if(dragging){
+                const x=e.clientX - offsetX;
+                const y=e.clientY - offsetY;
+
+                const trail=document.createElement('div');
+                trail.className='trail';
+                trail.style.left=bot.offsetLeft+'px';
+                trail.style.top=bot.offsetTop+'px';
+                document.body.appendChild(trail);
+                setTimeout(()=>trail.remove(),400);
+
+                bot.style.left=x+'px';
+                bot.style.top=y+'px';
+            } else {
+                // hover-away
+                const rect=bot.getBoundingClientRect();
+                const dx=(rect.left+rect.width/2 - e.clientX);
+                const dy=(rect.top+rect.height/2 - e.clientY);
+                const dist=Math.sqrt(dx*dx+dy*dy);
+                if(dist<80){
+                    const strength=(1-dist/80)*30;
+                    bot.style.transform='translate('+dx/dist*strength+'px,'+dy/dist*strength+'px)';
+                } else {
+                    bot.style.transform='';
+                }
+            }
+
+            // eyes track mouse
+            const bx=bot.offsetLeft+30;
+            const by=bot.offsetTop+30;
+            const distance=3;
+            const angle=Math.atan2(e.clientY-by,e.clientX-bx);
+            const dx=Math.cos(angle)*distance;
+            const dy=Math.sin(angle)*distance;
+            leftEye.style.transform='translate('+dx+'px,'+dy+'px)';
+            rightEye.style.transform='translate('+dx+'px,'+dy+'px)';
+        });
+
+        document.addEventListener('mouseup', e=>{
+            dragging=false;
+            bot.style.cursor='grab';
+        });
+
+        bot.addEventListener('click', e=>{
+            exprIndex=(exprIndex+1)%expressions.length;
+            bot.style.transform=expressions[exprIndex];
+        });
+        </script>
+    `);
+    </script>
+    """, height=0)
 
 # --------------------
-# Main App Interface
+# Main M.I.S.O Section Management
 # --------------------
-st.write(f"Welcome, **{st.session_state.user_name}** 👋")
 data = load_data()
 
 st.markdown("---")
 section_input = st.text_input("Open or create a section")
-
 if not section_input:
     st.info("Enter a section name to continue.")
     st.stop()
