@@ -33,71 +33,59 @@ def render_miso_bot():
     """Render the M.I.S.O. bot widget with eye-tracking and dragging functionality."""
     html_code = """
     <style>
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
         #miso-container {
             position: fixed;
             bottom: 30px;
             right: 30px;
             z-index: 9999;
             font-family: Arial, sans-serif;
+            will-change: transform, opacity;
         }
-        
-        #miso-bot {
-            position: relative;
-            width: 44px;
-            height: 44px;
-            cursor: grab;
-            user-select: none;
-        }
-        
-        #miso-bot:active {
-            cursor: grabbing;
-        }
-        
+
+        /* Body (head) is a white circle 60px with 5px light-grey outline */
+        #miso-bot { position: relative; width: 60px; height: 60px; cursor: grab; user-select: none; touch-action: none; }
+        #miso-bot:active { cursor: grabbing; }
+
         .miso-body {
             position: absolute;
-            width: 44px;
-            height: 44px;
-            border: 2px solid #d0d0d0;
+            width: 60px;
+            height: 60px;
+            border: 5px solid #dcdcdc; /* light grey outline */
             border-radius: 50%;
-            background: #f5f5f5;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            transition: all 0.1s ease;
+            background: #ffffff; /* white body */
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            transition: all 0.12s ease;
         }
-        
+
+        /* Two black eyes, 25px each, centered vertically inside the 60px head */
         .miso-eye {
+            --expr-transform: none;
+            --gaze-x: 0px;
+            --gaze-y: 0px;
             position: absolute;
-            width: 5px;
-            height: 5px;
+            width: 25px;
+            height: 25px;
             background: #000;
             border-radius: 50%;
-            top: 14px;
+            top: 18px; /* centered vertically: (60-25)/2 = 17.5 */
+            overflow: hidden;
+            transition: transform 0.12s ease, height 0.12s ease;
+            transform: var(--expr-transform) translate(var(--gaze-x), var(--gaze-y));
         }
-        
-        .miso-eye-left {
-            left: 12px;
-        }
-        
-        .miso-eye-right {
-            right: 12px;
-        }
-        
-        .miso-pupil {
-            position: absolute;
-            width: 3px;
-            height: 3px;
-            background: #000;
-            border-radius: 50%;
-            top: 1px;
-            left: 1px;
-        }
-        
-        #miso-bot.blinking .miso-eye {
-            height: 1px;
-            top: 15.5px;
-        }
+
+        /* Horizontal placement so eyes sit comfortably inside the 60px head */
+        .miso-eye-left { left: 6px; }
+        .miso-eye-right { left: 29px; }
+
+        /* Expression helpers — change the eye SHAPE to convey emotion */
+        .expr-normal .miso-eye { --expr-transform: none; }
+        .expr-surprised .miso-eye { --expr-transform: scale(1.15); }
+        .expr-sleepy .miso-eye { height: 10px; top: 25px; --expr-transform: none; border-radius: 12px / 6px; }
+        .expr-angry .miso-eye { --expr-transform: rotate(-8deg) scale(1); border-radius: 50% 40% 40% 50%; }
+
+        /* Blink animation for quick feedback (squash eyes) */
+        #miso-bot.blinking .miso-eye { height: 6px; top: 28px; }
         
         #miso-search-modal {
             display: none;
@@ -212,12 +200,8 @@ def render_miso_bot():
     
     <div id="miso-container">
         <div id="miso-bot" class="miso-body">
-            <div class="miso-eye miso-eye-left">
-                <div class="miso-pupil" id="pupil-left"></div>
-            </div>
-            <div class="miso-eye miso-eye-right">
-                <div class="miso-pupil" id="pupil-right"></div>
-            </div>
+            <div class="miso-eye miso-eye-left"></div>
+            <div class="miso-eye miso-eye-right"></div>
         </div>
     </div>
     
@@ -229,18 +213,31 @@ def render_miso_bot():
         const closeBtn = document.getElementById('miso-close-btn');
         const searchInput = document.getElementById('miso-search-input');
         const categoryList = document.getElementById('miso-category-list');
-        const pupilLeft = document.getElementById('pupil-left');
-        const pupilRight = document.getElementById('pupil-right');
-        
-        // Store bot position in localStorage
+        const leftEye = document.querySelector('.miso-eye-left');
+        const rightEye = document.querySelector('.miso-eye-right');
+
+        // Expression state - will be applied on the container as classes
+        const expressions = ['expr-normal', 'expr-surprised', 'expr-sleepy', 'expr-angry'];
+        let exprIndex = 0;
+        function applyExpression() {
+            expressions.forEach(c => misoContainer.classList.remove(c));
+            misoContainer.classList.add(expressions[exprIndex]);
+        }
+        applyExpression();
+
+        // Store bot position in localStorage (keeps previous behaviour)
         const savedPosition = localStorage.getItem('miso-position');
         if (savedPosition) {
-            const pos = JSON.parse(savedPosition);
-            misoContainer.style.bottom = pos.bottom + 'px';
-            misoContainer.style.right = pos.right + 'px';
+            try {
+                const pos = JSON.parse(savedPosition);
+                if (pos.bottom !== undefined) misoContainer.style.bottom = pos.bottom + 'px';
+                if (pos.right !== undefined) misoContainer.style.right = pos.right + 'px';
+            } catch (e) {
+                // ignore parse errors
+            }
         }
-        
-        // Categories
+
+        // Categories (unchanged)
         const categories = {
             'modules': 'Modules',
             'docs': 'Documentation',
@@ -248,8 +245,7 @@ def render_miso_bot():
             'settings': 'Settings',
             'about': 'About'
         };
-        
-        // Render categories
+
         function renderCategories(filter = '') {
             categoryList.innerHTML = '';
             Object.entries(categories).forEach(([key, label]) => {
@@ -262,11 +258,11 @@ def render_miso_bot():
                 }
             });
         }
-        
-        // Dragging functionality
+
+        // Dragging functionality (unchanged behaviour)
         let isDragging = false;
         let startX, startY, startLeft, startTop;
-        
+
         misoBot.addEventListener('mousedown', (e) => {
             isDragging = true;
             startX = e.clientX;
@@ -274,29 +270,27 @@ def render_miso_bot():
             startLeft = misoContainer.offsetLeft;
             startTop = misoContainer.offsetTop;
             misoBot.style.cursor = 'grabbing';
+            misoContainer.style.transform = '';
         });
-        
+
         document.addEventListener('mousemove', (e) => {
             if (isDragging) {
                 const deltaX = e.clientX - startX;
                 const deltaY = e.clientY - startY;
-                
                 misoContainer.style.left = (startLeft + deltaX) + 'px';
                 misoContainer.style.bottom = 'auto';
                 misoContainer.style.right = 'auto';
                 misoContainer.style.top = (startTop + deltaY) + 'px';
             } else {
-                // Eye tracking - look at mouse
                 trackMouse(e.clientX, e.clientY);
+                avoidIfNeeded(e.clientX, e.clientY);
             }
         });
-        
+
         document.addEventListener('mouseup', () => {
             if (isDragging) {
                 isDragging = false;
                 misoBot.style.cursor = 'grab';
-                
-                // Save position
                 const rect = misoContainer.getBoundingClientRect();
                 localStorage.setItem('miso-position', JSON.stringify({
                     bottom: window.innerHeight - rect.bottom,
@@ -304,35 +298,83 @@ def render_miso_bot():
                 }));
             }
         });
-        
-        // Eye tracking function
+
+        // Eye tracking - smaller travel for inner pupils (suitable for 25px eyes)
         function trackMouse(mouseX, mouseY) {
-            const botRect = misoBot.getBoundingClientRect();
-            const botCenterX = botRect.left + botRect.width / 2;
-            const botCenterY = botRect.top + botRect.height / 2;
-            
-            // Calculate angle to mouse
-            const angle = Math.atan2(mouseY - botCenterY, mouseX - botCenterX);
-            const distance = 1.5; // How far the pupil moves
-            
-            // Move left pupil
-            const leftPupilX = Math.cos(angle) * distance;
-            const leftPupilY = Math.sin(angle) * distance;
-            pupilLeft.style.transform = `translate(${leftPupilX}px, ${leftPupilY}px)`;
-            
-            // Move right pupil
-            const rightPupilX = Math.cos(angle) * distance;
-            const rightPupilY = Math.sin(angle) * distance;
-            pupilRight.style.transform = `translate(${rightPupilX}px, ${rightPupilY}px)`;
+            const leftEye = document.querySelector('.miso-eye-left');
+            const rightEye = document.querySelector('.miso-eye-right');
+            if (!leftEye || !rightEye) return;
+
+            const leftRect = leftEye.getBoundingClientRect();
+            const rightRect = rightEye.getBoundingClientRect();
+
+            const leftCenterX = leftRect.left + leftRect.width / 2;
+            const leftCenterY = leftRect.top + leftRect.height / 2;
+            const rightCenterX = rightRect.left + rightRect.width / 2;
+            const rightCenterY = rightRect.top + rightRect.height / 2;
+
+            const distance = 3; // how far the eye shifts to indicate gaze
+
+            const angleL = Math.atan2(mouseY - leftCenterY, mouseX - leftCenterX);
+            const lx = Math.cos(angleL) * distance;
+            const ly = Math.sin(angleL) * distance;
+            leftEye.style.setProperty('--gaze-x', `${lx}px`);
+            leftEye.style.setProperty('--gaze-y', `${ly}px`);
+
+            const angleR = Math.atan2(mouseY - rightCenterY, mouseX - rightCenterX);
+            const rx = Math.cos(angleR) * distance;
+            const ry = Math.sin(angleR) * distance;
+            rightEye.style.setProperty('--gaze-x', `${rx}px`);
+            rightEye.style.setProperty('--gaze-y', `${ry}px`);
         }
-        
-        // Click to open modal
+
+        // Hover-away behaviour tuned for smaller bot
+        const avoidThreshold = 80;
+        let isAvoiding = false;
+        function avoidIfNeeded(mouseX, mouseY) {
+            const rect = misoBot.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const dx = centerX - mouseX;
+            const dy = centerY - mouseY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (!isDragging && dist < avoidThreshold) {
+                const strength = (1 - dist / avoidThreshold) * 40; // px to move
+                const nx = dist === 0 ? 0 : (dx / dist);
+                const ny = dist === 0 ? 0 : (dy / dist);
+                misoContainer.style.transform = `translate(${nx * strength}px, ${ny * strength}px)`;
+                misoContainer.style.transition = 'transform 0.14s ease';
+                misoContainer.style.opacity = '0.95';
+                isAvoiding = true;
+            } else if (isAvoiding) {
+                misoContainer.style.transform = '';
+                misoContainer.style.transition = 'transform 0.22s ease';
+                misoContainer.style.opacity = '1';
+                isAvoiding = false;
+            }
+        }
+
+        // Click interactions: single-click cycles expression, double-click opens modal
+        let clickTimeout = null;
         misoBot.addEventListener('click', (e) => {
-            if (!isDragging) {
+            if (isDragging) { e.stopPropagation(); return; }
+            if (clickTimeout) {
+                // double-click detected -> open modal
+                clearTimeout(clickTimeout);
+                clickTimeout = null;
                 openModal();
-                // Blink effect
-                misoBot.classList.add('blinking');
-                setTimeout(() => misoBot.classList.remove('blinking'), 300);
+                misoContainer.classList.add('blinking');
+                setTimeout(() => misoContainer.classList.remove('blinking'), 300);
+            } else {
+                // schedule single-click action (cycle expression)
+                clickTimeout = setTimeout(() => {
+                    exprIndex = (exprIndex + 1) % expressions.length;
+                    applyExpression();
+                    // small blink on change
+                    misoContainer.classList.add('blinking');
+                    setTimeout(() => misoContainer.classList.remove('blinking'), 220);
+                    clickTimeout = null;
+                }, 220);
             }
             e.stopPropagation();
         });
